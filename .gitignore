@@ -3,7 +3,6 @@ Makefile
 Makefile.in
 aclocal.m4
 autom4te.cache/
-config.h
 config.h.in
 config.log
 config.status
@@ -22,3 +21,11 @@ src/mfoc.exe
 stamp-h1
 *.o
 .history/
+
+src/x64/
+
+.vs/
+
+dist/
+
+x64/

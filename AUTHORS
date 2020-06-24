@@ -7,3 +7,13 @@ Pavol Luptak - project leader, minor coding, testing and bugreporting
 
 Michal Boska <boska.michal@gmail.com> - porting to libnfc 1.3.3
 Romuald Conty <romuald@libnfc.org> - porting to libnfc 1.3.9 and upper
+
+For the hardnested part:
+
+Aram Verstegen aka azcid - https://github.com/aczid/crypto1_bs
+Carlo Meijer and Roel Verdult - http://www.cs.ru.nl/~rverdult/Ciphertext-only_Cryptanalysis_on_Hardened_Mifare_Classic_Cards-CCS_2015.pdf
+Iceman - https://github.com/iceman1001/proxmark3
+Piwi - https://github.com/pwpiwi/proxmark3
+Blapost Solver
+Valentin aka vk496 https://github.com/vk496/mfoc/tree/hardnested
+gelotus https://github.com/gelotus/mfoc/tree/win64
