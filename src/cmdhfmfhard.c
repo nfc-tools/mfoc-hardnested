@@ -1049,6 +1049,7 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
     uint32_t enc_bytes = 0;
     uint8_t parbits = 0;
 
+    mf_configure(r.pdi);
     do {
         nfc_device_set_property_bool(r.pdi, NP_HANDLE_CRC, true);
         nfc_device_set_property_bool(r.pdi, NP_HANDLE_PARITY, true);
