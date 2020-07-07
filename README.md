@@ -37,6 +37,7 @@ make && sudo make install
 # Usage #
 Needs libusb0.dll and nfc.dll in the path, better on the same directory.
 Needs to install libusbK v3.0.7.0, using Zadig https://zadig.akeo.ie/, go to Option, List All Devices, select your reader, select libusbK(v3.0.7.0) and click on replace driver.
+Then go in device manager and disable "Allow the computer to turn off this device to save power" in your reader under libusbK USB Devices.
 Put one MIFARE Classic tag that you want keys recovering;
 Lauching mfoc, you will need to pass options, see
 ```

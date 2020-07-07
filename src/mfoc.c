@@ -360,8 +360,7 @@ int main(int argc, char *const argv[])
     use_default_key=false;
     printf("\nChecking for key reuse...\n");
     defKeys_len=0;
-    free(defKeys);
-    defKeys=malloc(0);
+    defKeys = NULL;
     for (int i=0;i<t.num_sectors;++i) {
       if (t.sectors[i].foundKeyA) {
         bool seen=false;

@@ -1048,8 +1048,6 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
     //            
     uint32_t enc_bytes = 0;
     uint8_t parbits = 0;
-
-    mf_configure(r.pdi);
     do {
         nfc_device_set_property_bool(r.pdi, NP_HANDLE_CRC, true);
         nfc_device_set_property_bool(r.pdi, NP_HANDLE_PARITY, true);
@@ -1088,6 +1086,9 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
         }
         last_sample_clock = msclock();
     } while (!acquisition_completed);
+    nfc_device_set_property_bool(r.pdi, NP_HANDLE_CRC, true);
+    nfc_device_set_property_bool(r.pdi, NP_HANDLE_PARITY, true);
+    mf_anticollision(t, r);
     return 0;
 }
 
@@ -1764,9 +1765,5 @@ int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBloc
     free_bitarray(all_bitflips_bitarray[EVEN_STATE]);
     free_sum_bitarrays();
     free_part_sum_bitarrays();
-    nfc_close(r.pdi);
-    mf_init(&r);
-    mf_configure(r.pdi);
-    mf_anticollision(t, r);
     return 0;
 }
