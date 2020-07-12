@@ -100,6 +100,23 @@ static uint32_t* sum_a0_bitarrays[2][NUM_SUMS];
 static uint32_t* bitflip_bitarrays[2][0x400];
 static uint32_t count_bitflip_bitarrays[2][0x400];
 
+// Status of target
+static uint8_t targetBLOCK;
+static uint8_t targetKEY;
+
+
+// Sectors 0 to 31 have 4 blocks per sector.
+// Sectors 32 to 39 have 16 blocks per sector.
+
+uint8_t block_to_sector(uint8_t block) {
+    if (block < 128) {
+        return block >> 2;
+    }
+    block -= 128;
+    return 32 + (block >> 4);
+}
+
+
 #ifdef X86_SIMD
 static void get_SIMD_instruction_set(char *instruction_set) {
     switch (GetSIMDInstr()) {
@@ -132,11 +149,22 @@ static void print_progress_header(void) {
     char progress_text[80];
     sprintf(progress_text, "Start using %d threads", num_CPUs());
 #endif
+    
+    static uint8_t keyType;
+    if (targetKEY == MC_AUTH_A) {
+        keyType = 'A';
+    } else if (targetKEY == MC_AUTH_B) {
+        keyType = 'B';
+    } else {
+        keyType = '?';
+    }
+    
+    
     PrintAndLog(true, "\n\n");
     PrintAndLog(true, " time    | trg | #nonces | Activity                                                | expected to brute force");
     PrintAndLog(true, "         |     |         |                                                         | #states         | time ");
     PrintAndLog(true, "-------------------------------------------------------------------------------------------------------------");
-    PrintAndLog(true, "       0 |  0? |       0 | %-55s |                 |", progress_text);
+    PrintAndLog(true, "       0 | %2d%c |       0 | %-55s |                 |", block_to_sector(targetBLOCK), keyType, progress_text);
 }
 
 
@@ -166,7 +194,7 @@ void hardnested_print_progress(uint32_t nonces, char *activity, float brute_forc
             keyType = '?';
         }
 
-        PrintAndLog(newline, " %7.0f | %2d%c | %7d | %-55s | %15.0f | %5s", (float) total_time / 1000.0, trgKeyBlock / 4, keyType, nonces, activity, brute_force, brute_force_time_string);
+        PrintAndLog(newline, " %7.0f | %2d%c | %7d | %-55s | %15.0f | %5s", (float) total_time / 1000.0, block_to_sector(trgKeyBlock), keyType, nonces, activity, brute_force, brute_force_time_string);
     }
 }
 
@@ -281,7 +309,7 @@ static void init_bitflip_bitarrays(void) {
     qsort(all_effective_bitflip + num_1st_byte_effective_bitflips, num_all_effective_bitflips - num_1st_byte_effective_bitflips, sizeof(uint16_t), compare_count_bitflip_bitarrays);
     char progress_text[80];
     sprintf(progress_text, "Using %d precalculated bitflip state tables", num_all_effective_bitflips);
-    hardnested_print_progress(0, progress_text, (float) (1LL << 47), 0, 0, 0, true);
+    hardnested_print_progress(0, progress_text, (float) (1LL << 47), 0, targetBLOCK, targetKEY, true);
 }
 
 
@@ -1019,17 +1047,6 @@ static void apply_sum_a0(void) {
     }
 }
 
-// Sectors 0 to 31 have 4 blocks per sector.
-// Sectors 32 to 39 have 16 blocks per sector.
-
-uint8_t block_to_sector(uint8_t block) {
-    if (block < 128) {
-        return block >> 2;
-    }
-    block -= 128;
-    return 32 + (block >> 4);
-}
-
 
 static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBlockNo, uint8_t trgKeyType) {
     last_sample_clock = msclock();
@@ -1372,14 +1389,14 @@ static bool TestIfKeyExists(uint64_t key) {
         }
         if (found_odd && found_even) {
             num_keys_tested += count;
-            hardnested_print_progress(num_acquired_nonces, "(Test: Key found)", 0.0, 0, 0, 0, true);
+            hardnested_print_progress(num_acquired_nonces, "(Test: Key found)", 0.0, 0, targetBLOCK, targetKEY, true);
             crypto1_destroy(pcs);
             return true;
         }
     }
 
     num_keys_tested += count;
-    hardnested_print_progress(num_acquired_nonces, "(Test: Key NOT found)", 0.0, 0, 0, 0, true);
+    hardnested_print_progress(num_acquired_nonces, "(Test: Key NOT found)", 0.0, 0, targetBLOCK, targetKEY, true);
 
     crypto1_destroy(pcs);
     return false;
@@ -1568,7 +1585,7 @@ static void generate_candidates(uint8_t sum_a0_idx, uint8_t sum_a8_idx) {
     free(sums);
 
     update_expected_brute_force(best_first_bytes[0]);
-    hardnested_print_progress(num_acquired_nonces, "Apply Sum(a8) and all bytes bitflip properties", nonces[best_first_bytes[0]].expected_num_brute_force, 0, 0, 0, true);
+    hardnested_print_progress(num_acquired_nonces, "Apply Sum(a8) and all bytes bitflip properties", nonces[best_first_bytes[0]].expected_num_brute_force, 0, targetBLOCK, targetKEY, true);
 }
 
 
@@ -1676,6 +1693,10 @@ static void set_test_state(uint8_t byte) {
 
 
 int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBlockNo, uint8_t trgKeyType) {
+    
+    targetBLOCK = trgBlockNo;
+    targetKEY = trgKeyType;
+    
     char progress_text[80];
     cuid = t.authuid;
 
@@ -1691,7 +1712,7 @@ int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBloc
     start_time = msclock();
     print_progress_header();
     sprintf(progress_text, "Brute force benchmark: %1.0f million (2^%1.1f) keys/s", brute_force_per_second / 1000000, log(brute_force_per_second) / log(2.0));
-    hardnested_print_progress(0, progress_text, (float) (1LL << 47), 0, 0, 0, true);
+    hardnested_print_progress(0, progress_text, (float) (1LL << 47), 0, targetBLOCK, targetKEY, true);
     init_bitflip_bitarrays();
     init_part_sum_bitarrays();
     init_sum_bitarrays();
