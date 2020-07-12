@@ -593,6 +593,9 @@ int main(int argc, char *const argv[])
         if ((mf_enhanced_auth(e_sector, 0, t, r, &d, pk, 'd', dumpKeysA, 0, 0) == -99999) || force_hardnested == true) {
         //Hardnested attack
             
+            mf_configure(r.pdi);
+            mf_anticollision(t, r);
+            
             uint8_t blockNo = sector_to_block(e_sector); //Block
             uint8_t keyType = (t.sectors[e_sector].foundKeyA ? MC_AUTH_A : MC_AUTH_B);
             uint8_t *key = (t.sectors[e_sector].foundKeyA ? t.sectors[e_sector].KeyA : t.sectors[e_sector].KeyB);;

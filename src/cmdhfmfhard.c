@@ -1051,8 +1051,11 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
     do {
         nfc_device_set_property_bool(r.pdi, NP_HANDLE_CRC, true);
         nfc_device_set_property_bool(r.pdi, NP_HANDLE_PARITY, true);
-        mf_anticollision(t, r);
         mf_enhanced_auth(e_sector, a_sector, t, r, 0, &pk, 'h', dumpKeysA, &enc_bytes, &parbits);
+        
+        mf_configure(r.pdi);
+        mf_anticollision(t, r);
+        
         num_acquired_nonces += add_nonce(enc_bytes, parbits);
         if (first_byte_num == 256) {
             if (hardnested_stage == CHECK_1ST_BYTES) {
@@ -1088,7 +1091,6 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
     } while (!acquisition_completed);
     nfc_device_set_property_bool(r.pdi, NP_HANDLE_CRC, true);
     nfc_device_set_property_bool(r.pdi, NP_HANDLE_PARITY, true);
-    mf_anticollision(t, r);
     return 0;
 }
 
