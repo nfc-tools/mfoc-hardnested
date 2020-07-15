@@ -105,6 +105,59 @@ static uint8_t targetBLOCK;
 static uint8_t targetKEY;
 
 
+static bool hard_LOW_MEM;
+static bool bitflips_available[2][0x400];
+static bool bitflips_allocated[2][0x400];
+static pthread_mutex_t bitflip_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
+void remove_bitflip_data(odd_even_t odd_even, uint16_t bitflip){
+    pthread_mutex_lock(&bitflip_mutex);
+    if (hard_LOW_MEM && bitflips_allocated[odd_even][bitflip]) {
+        free_bitarray(bitflip_bitarrays[odd_even][bitflip]);
+        bitflips_allocated[odd_even][bitflip] = false;
+    }
+    pthread_mutex_unlock(&bitflip_mutex);
+}
+
+uint32_t* get_bitflip_data(odd_even_t odd_even, uint16_t bitflip) {
+    if (!bitflips_available[odd_even][bitflip]) {
+        return NULL;
+    }
+
+    pthread_mutex_lock(&bitflip_mutex);
+    if (hard_LOW_MEM && !bitflips_allocated[odd_even][bitflip]) {
+        lzma_stream strm = LZMA_STREAM_INIT;
+        bitflip_info p = get_bitflip(odd_even, bitflip);
+
+        uint32_t count = 0;
+
+        lzma_init_inflate(&strm, p.input_buffer, p.len, (uint8_t*) & count, sizeof (count));
+        if ((float) count / (1 << 24) < IGNORE_BITFLIP_THRESHOLD) {
+            uint32_t *bitset = (uint32_t *) malloc_bitarray(sizeof (uint32_t) * (1 << 19));
+            if (bitset == NULL) {
+                printf("Out of memory error in init_bitflip_statelists(). Aborting...\n");
+                lzma_end(&strm);
+                exit(4);
+            }
+
+            strm.next_out = (uint8_t *) bitset;
+            strm.avail_out = sizeof (uint32_t) * (1 << 19);
+            decompress(&strm);
+
+            bitflip_bitarrays[odd_even][bitflip] = bitset;
+            bitflips_allocated[odd_even][bitflip] = true;
+        }
+        lzma_end(&strm);
+    }
+    pthread_mutex_unlock(&bitflip_mutex);
+    
+    return bitflip_bitarrays[odd_even][bitflip];
+
+
+}
+
+
 // Sectors 0 to 31 have 4 blocks per sector.
 // Sectors 32 to 39 have 16 blocks per sector.
 
@@ -258,10 +311,13 @@ static void init_bitflip_bitarrays(void) {
         num_effective_bitflips[odd_even] = 0;
         for (uint16_t bitflip = 0x001; bitflip < 0x400; bitflip++) {
             bitflip_bitarrays[odd_even][bitflip] = NULL;
+            bitflips_available[odd_even][bitflip] = false;
+            bitflips_allocated[odd_even][bitflip] = false;
             count_bitflip_bitarrays[odd_even][bitflip] = 1 << 24;
             bitflip_info p = get_bitflip(odd_even, bitflip);
             if (p.input_buffer != NULL) {
                 uint32_t count = 0;
+                bitflips_available[odd_even][bitflip] = true;
 
                 lzma_init_inflate(&strm, p.input_buffer, p.len, (uint8_t*)&count, sizeof(count));
                 if ((float)count / (1 << 24) < IGNORE_BITFLIP_THRESHOLD) {
@@ -277,7 +333,11 @@ static void init_bitflip_bitarrays(void) {
                     decompress(&strm);
 
                   effective_bitflip[odd_even][num_effective_bitflips[odd_even]++] = bitflip;
-                  bitflip_bitarrays[odd_even][bitflip] = bitset;
+                  if (hard_LOW_MEM) {
+                    free_bitarray(bitset);
+                  } else {
+                    bitflip_bitarrays[odd_even][bitflip] = bitset;  
+                  }
                   count_bitflip_bitarrays[odd_even][bitflip] = count;
                 }
 				lzma_end(&strm);
@@ -315,9 +375,15 @@ static void init_bitflip_bitarrays(void) {
 
 static void free_bitflip_bitarrays(void) {
     for (int16_t bitflip = 0x3ff; bitflip > 0x000; bitflip--) {
+        if (hard_LOW_MEM && !bitflips_allocated[ODD_STATE][bitflip]) {
+            continue;
+        }
         free_bitarray(bitflip_bitarrays[ODD_STATE][bitflip]);
     }
     for (int16_t bitflip = 0x3ff; bitflip > 0x000; bitflip--) {
+        if (hard_LOW_MEM && !bitflips_allocated[EVEN_STATE][bitflip]) {
+            continue;
+        }
         free_bitarray(bitflip_bitarrays[EVEN_STATE][bitflip]);
     }
 }
@@ -927,13 +993,14 @@ __attribute__((force_align_arg_pointer))
                             || (parity1 != parity2 && (bitflip & 0x100))) {     // not bitflip
                         nonces[i].BitFlips[bitflip] = 1;
                         for (odd_even_t odd_even = EVEN_STATE; odd_even <= ODD_STATE; odd_even++) {
-                            if (bitflip_bitarrays[odd_even][bitflip] != NULL) {
+                            if (get_bitflip_data(odd_even, bitflip) != NULL) {
                                 uint32_t old_count = nonces[i].num_states_bitarray[odd_even];
-                                nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], bitflip_bitarrays[odd_even][bitflip]);
+                                nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], get_bitflip_data(odd_even, bitflip));
                                 if (nonces[i].num_states_bitarray[odd_even] != old_count) {
                                     nonces[i].all_bitflips_dirty[odd_even] = true;
                                 }
-                            }
+                            } 
+                            remove_bitflip_data(odd_even, bitflip);
                         }
                     }
                 }
@@ -962,13 +1029,14 @@ __attribute__((force_align_arg_pointer))
                                     || (parity1 != parity2 && (bitflip & 0x100))) { // not bitflip
                                 nonces[i].BitFlips[bitflip] = 1;
                                 for (odd_even_t odd_even = EVEN_STATE; odd_even <= ODD_STATE; odd_even++) {
-                                    if (bitflip_bitarrays[odd_even][bitflip] != NULL) {
+                                    if (get_bitflip_data(odd_even, bitflip) != NULL) {
                                         uint32_t old_count = nonces[i].num_states_bitarray[odd_even];
-                                        nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], bitflip_bitarrays[odd_even][bitflip]);
+                                        nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], get_bitflip_data(odd_even, bitflip));
                                         if (nonces[i].num_states_bitarray[odd_even] != old_count) {
                                             nonces[i].all_bitflips_dirty[odd_even] = true;
                                         }
                                     }
+                                    remove_bitflip_data(odd_even, bitflip);
                                 }
                                 break;
                             }
@@ -1692,10 +1760,12 @@ static void set_test_state(uint8_t byte) {
 }
 
 
-int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBlockNo, uint8_t trgKeyType) {
+int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBlockNo, uint8_t trgKeyType, bool hard_low_memory) {
     
     targetBLOCK = trgBlockNo;
     targetKEY = trgKeyType;
+    
+    hard_LOW_MEM = hard_low_memory;
     
     char progress_text[80];
     cuid = t.authuid;
@@ -1714,6 +1784,7 @@ int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBloc
     sprintf(progress_text, "Brute force benchmark: %1.0f million (2^%1.1f) keys/s", brute_force_per_second / 1000000, log(brute_force_per_second) / log(2.0));
     hardnested_print_progress(0, progress_text, (float) (1LL << 47), 0, targetBLOCK, targetKEY, true);
     init_bitflip_bitarrays();
+//    exit(0);
     init_part_sum_bitarrays();
     init_sum_bitarrays();
     init_allbitflips_array();

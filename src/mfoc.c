@@ -146,6 +146,9 @@ int main(int argc, char *const argv[])
   mifare_cmd mc;
   FILE *pfDump = NULL;
   
+  // Hardnested low memory
+  bool hard_low_memory = false;
+  
   //File pointers for the keyfile 
   FILE * fp;
   char line[20];
@@ -156,7 +159,7 @@ int main(int argc, char *const argv[])
   struct slre_cap caps[2];  
 
   // Parse command line arguments
-  while ((ch = getopt(argc, argv, "hCFP:T:O:k:f:")) != -1) {
+  while ((ch = getopt(argc, argv, "hCZFP:T:O:k:f:")) != -1) {
     switch (ch) {
       case 'C':
         use_default_key=false;
@@ -222,6 +225,10 @@ int main(int argc, char *const argv[])
       case 'F':
         //force hardnested
         force_hardnested = true;
+        break;
+      case 'Z':
+        //Reduce memory usage
+        hard_low_memory = true;
         break;
       case 'O':
         // File output
@@ -601,7 +608,7 @@ int main(int argc, char *const argv[])
             uint8_t *key = (t.sectors[e_sector].foundKeyA ? t.sectors[e_sector].KeyA : t.sectors[e_sector].KeyB);;
             uint8_t trgBlockNo = sector_to_block(j); //block
             uint8_t trgKeyType = (dumpKeysA ? MC_AUTH_A : MC_AUTH_B);
-            mfnestedhard(blockNo, keyType, key, trgBlockNo, trgKeyType);
+            mfnestedhard(blockNo, keyType, key, trgBlockNo, trgKeyType, hard_low_memory);
             did_hardnested=true;
             goto check_keys;
         } else {
@@ -825,6 +832,7 @@ void usage(FILE *stream, uint8_t errnr)
   fprintf(stream, "  h     print this help and exit\n");
   fprintf(stream, "  C     skip testing default keys\n");
   fprintf(stream, "  F     force the hardnested keys extraction\n");
+  fprintf(stream, "  Z     reduce memory usage\n");
   fprintf(stream, "  k     try the specified key in addition to the default keys\n");
   fprintf(stream, "  f     parses a file of keys to add in addition to the default keys \n");    
   fprintf(stream, "  P     number of probes per sector, instead of default of 20\n");
