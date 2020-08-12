@@ -87,8 +87,8 @@ typedef struct {
 } countKeys;
 
 
-mftag        t;
-mfreader    r;
+extern mftag        t;
+extern mfreader    r;
 
 
 void usage(FILE *stream, uint8_t errnr);

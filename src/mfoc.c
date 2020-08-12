@@ -65,6 +65,9 @@
 
 #define MAX_FRAME_LEN 264
 
+mftag        t;
+mfreader    r;
+
 static const nfc_modulation nm = {
 .nmt = NMT_ISO14443A,
 .nbr = NBR_106,
