@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: gelotus <gelotus@github.com>
 Uploaders: gelotus <gelotus@github.com>
-Build-Depends: debhelper (>= 11), libnfc-dev, pkg-config
+Build-Depends: debhelper (>= 11), libnfc-dev, liblzma-dev, pkg-config
 Standards-Version: 4.1.5
 Homepage: https://github.com/nfc-tools/mfoc-hardnested/
 
