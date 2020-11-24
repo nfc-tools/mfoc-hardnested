@@ -1,11 +1,11 @@
-FROM ubuntu
+FROM ubuntu:18.04
 
 WORKDIR /mfoc
 
 
 RUN set -e; \
     apt-get update; \
-    apt-get install -y build-essential autoconf pkg-config automake libnfc-dev liblzma-dev
+    apt-get install -y file build-essential autoconf pkg-config automake libnfc-dev liblzma-dev
 
 
 # Install gcc
@@ -23,4 +23,5 @@ ENV CC=${COMPILER}
 RUN autoreconf -vis
 RUN ./configure
 RUN make
-# RUN ./src/mfoc-hardnested -h
+RUN file ./src/mfoc-hardnested
+RUN ./src/mfoc-hardnested -h
