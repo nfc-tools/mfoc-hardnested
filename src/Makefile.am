@@ -32,8 +32,8 @@ if X86_SIMD
 
 else
 
-  SIMDOBJ = hardnested/hardnested_bf_core_NOSIMD.o hardnested/hardnested_bitarray_core_NOSIMD.o
-  hardnested/%_NOSIMD.o : hardnested/%.c
+  SIMD = hardnested/hardnested_bf_core_NOSIMD.o hardnested/hardnested_bitarray_core_NOSIMD.o
+  hardnested/%_NOSIMD.o : hardnested/%_NOSIMD.c
 	$(CC) $(DEPFLAGS) $(CFLAGS) -c -o $@ $<
 
 endif

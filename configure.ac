@@ -42,25 +42,29 @@ AC_CHECK_FUNCS([memset])
 
 # x86 CPU features (without automatic gcc flags)
 AC_CANONICAL_HOST
-X86_SIMD=""
 AS_CASE([$host_cpu],
     [x86_64],
     [
         X86_SIMD="true"
+        CFLAGS="$CFLAGS -DX86_SIMD -std=c99"
     ],
     [i?86],
     [
         X86_SIMD="true"
+        CFLAGS="$CFLAGS -DX86_SIMD -std=c99"
     ],
     [amd64],
     [
         X86_SIMD="true"
-    ],)
+        CFLAGS="$CFLAGS -DX86_SIMD -std=c99"
+    ],
+    [default],
+    [
+        CFLAGS="$CFLAGS -std=c99"
+    ]
+)
 AC_SUBST([X86_SIMD])
 AM_CONDITIONAL([X86_SIMD], [test x$X86_SIMD = xtrue])
-
-# C99
-CFLAGS="$CFLAGS -DX86_SIMD -std=c99"
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile])
