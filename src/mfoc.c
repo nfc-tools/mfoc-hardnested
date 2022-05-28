@@ -64,6 +64,7 @@
 #include "cmdhfmfhard.h"
 
 #define MAX_FRAME_LEN 264
+#define SIGINT 2
 
 mftag        t;
 mfreader    r;
@@ -86,6 +87,19 @@ uint32_t unexpected_random = 0;
 // Sectors 0 to 31 have 4 blocks per sector.
 // Sectors 32 to 39 have 16 blocks per sector.
 
+//signal handler for CTRL+C
+void signal_handler(int sig)
+{
+  (void) sig;
+  printf("\n");
+  printf("Safely exiting...\n");
+  nfc_close(r.pdi);
+  nfc_exit(context);
+  //exit(EXIT_FAILURE);
+  //exit(EXIT_FAILURE);
+  exit(SIGINT);
+}
+
 uint8_t sector_to_block(uint8_t sector)
 {
   if (sector<32) {
@@ -98,6 +112,9 @@ uint8_t sector_to_block(uint8_t sector)
 
 int main(int argc, char *const argv[])
 {
+  //signal handler for CTRL+C
+  signal(SIGINT, signal_handler);
+
   int ch, i, k, n, j, m;
   int key, block;
   int succeed = 1;
@@ -261,13 +278,21 @@ int main(int argc, char *const argv[])
   mf_configure(r.pdi);
 
   int tag_count;
+  bool error = false;
+  detect:
   if ((tag_count = nfc_initiator_select_passive_target(r.pdi, nm, NULL, 0, &t.nt)) < 0) {
     nfc_perror(r.pdi, "nfc_initiator_select_passive_target");
     goto error;
   } else if (tag_count == 0) {
-    ERR("No tag found.");
-    goto error;
+    //ERR("No tag found."); error
+    //goto error; exit program here if no tag found
+    if(!error)
+      fprintf(stdout, "\nNo tag found.\nPlease present a tag to the reader.\n");
+    error = true;
+    goto detect;
   }
+
+  error = false;
 
   // Test if a compatible MIFARE tag is used
   if (((t.nt.nti.nai.btSak & 0x08) == 0) && (t.nt.nti.nai.btSak != 0x01)) {
@@ -409,7 +434,8 @@ int main(int argc, char *const argv[])
           int res;
           if ((res = nfc_initiator_mifare_cmd(r.pdi, mc, block, &mp)) < 0) {
             if (res != NFC_EMFCAUTHFAIL) {
-              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+
+              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 1");
               goto error;
             }
             mf_anticollision(t, r);
@@ -441,7 +467,7 @@ int main(int argc, char *const argv[])
                 }
               } else {
                   if (res != NFC_ERFTRANS) {
-                    nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+                    nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 2");
                     goto error;
                   }
                 mf_anticollision(t, r);
@@ -455,7 +481,7 @@ int main(int argc, char *const argv[])
           int res;
           if ((res = nfc_initiator_mifare_cmd(r.pdi, mc, block, &mp)) < 0) {
             if (res != NFC_EMFCAUTHFAIL) {
-              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 3");
               goto error;
             }
             mf_anticollision(t, r);
@@ -529,7 +555,7 @@ int main(int argc, char *const argv[])
           int res;
           if ((res = nfc_initiator_mifare_cmd(r.pdi, mc, t.sectors[j].trailer, &mp)) < 0) {
             if (res != NFC_EMFCAUTHFAIL) {
-              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 4");
               goto error;
             }
             mf_anticollision(t, r);
@@ -559,7 +585,7 @@ int main(int argc, char *const argv[])
                   }
                 } else {
                     if (res != NFC_ERFTRANS) {
-                      nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+                      nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 6");
                       goto error;
                     }
                   mf_anticollision(t, r);
@@ -633,7 +659,7 @@ int main(int argc, char *const argv[])
                   int res;
                   if ((res = nfc_initiator_mifare_cmd(r.pdi, mc, t.sectors[j].trailer, &mp)) < 0) {
                     if (res != NFC_EMFCAUTHFAIL) {
-                      nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+                      nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 7");
                       goto error;
                     }
                     mf_anticollision(t, r);
@@ -672,7 +698,7 @@ int main(int argc, char *const argv[])
                         }
                       } else {
                           if (res != NFC_ERFTRANS) {
-                            nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+                            nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 8");
                             goto error;
                           }
                         mf_anticollision(t, r);
@@ -722,7 +748,7 @@ int main(int argc, char *const argv[])
       int res;
       if ((res = nfc_initiator_mifare_cmd(r.pdi, MC_AUTH_A, block, &mp)) < 0) {
         if (res != NFC_EMFCAUTHFAIL) {
-          nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+          nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 9");
           goto error;
         }
         mf_configure(r.pdi);
@@ -737,7 +763,7 @@ int main(int argc, char *const argv[])
         } else {
           // Error, now try read() with B key
           if (res != NFC_ERFTRANS) {
-            nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+            nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 10");
             goto error;
           }
           mf_configure(r.pdi);
@@ -745,7 +771,7 @@ int main(int argc, char *const argv[])
           memcpy(mp.mpa.abtKey, t.sectors[i].KeyB, sizeof(t.sectors[i].KeyB));
           if ((res = nfc_initiator_mifare_cmd(r.pdi, MC_AUTH_B, block, &mp)) < 0) {
             if (res != NFC_EMFCAUTHFAIL) {
-              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+              nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 11");
               goto error;
             }
             mf_configure(r.pdi);
@@ -759,7 +785,7 @@ int main(int argc, char *const argv[])
               failure = false;
             } else {
               if (res != NFC_ERFTRANS) {
-                nfc_perror(r.pdi, "nfc_initiator_mifare_cmd");
+                nfc_perror(r.pdi, "nfc_initiator_mifare_cmd 12");
                 goto error;
               }
               mf_configure(r.pdi);
@@ -802,9 +828,10 @@ int main(int argc, char *const argv[])
   nfc_exit(context);
   exit(EXIT_SUCCESS);
 error:
-  nfc_close(r.pdi);
+  goto detect;
+  /* nfc_close(r.pdi);
   nfc_exit(context);
-  exit(EXIT_FAILURE);
+  exit(EXIT_FAILURE); */
 }
 
 void usage(FILE *stream, uint8_t errnr)
