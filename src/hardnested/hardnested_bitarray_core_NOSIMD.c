@@ -18,10 +18,12 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#ifndef __APPLE__
 #include <malloc.h>
+#endif
 
 uint32_t* malloc_bitarray_NOSIMD(uint32_t x) {
-    return __builtin_assume_aligned(memalign(__BIGGEST_ALIGNMENT__, (x)), __BIGGEST_ALIGNMENT__);
+    return __builtin_assume_aligned(aligned_alloc(__BIGGEST_ALIGNMENT__, (x)), __BIGGEST_ALIGNMENT__);
 }
 
 void free_bitarray_NOSIMD(uint32_t *x) {

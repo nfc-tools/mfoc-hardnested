@@ -19,7 +19,7 @@ LIBNFC_REQUIRED_VERSION=1.7.0
 PKG_CHECK_MODULES([libnfc], [libnfc >= $LIBNFC_REQUIRED_VERSION], [], [AC_MSG_ERROR([libnfc >= $LIBNFC_REQUIRED_VERSION is mandatory.])])
 
 PKG_CHECK_MODULES([liblzma], [liblzma], LIBS="$LIBS -llzma", [AC_MSG_ERROR([liblzma is mandatory.])])
-AX_PTHREAD([LIBS="$LIBS $PTHREAD_CFLAGS"],[AC_MSG_ERROR([pthread is mandatory.])])
+ACX_PTHREAD(LIBS="$LIBS $PTHREAD_CFLAGS", [AC_MSG_ERROR([pthread is mandatory.])])
 AC_CHECK_LIB(m, log, LIBS="$LIBS -lm", [AC_MSG_ERROR([math is mandatory.])])
 
 PKG_CONFIG_REQUIRES="libnfc"

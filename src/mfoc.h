@@ -1,7 +1,7 @@
 #ifndef MFOC_H__
 #define MFOC_H__
 
-#include <nfc/nfc-types.h>
+#include "nfc/nfc-types.h"
 
 #define MEM_CHUNK               10000
 #define TRY_KEYS                50
