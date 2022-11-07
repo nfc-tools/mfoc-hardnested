@@ -34,6 +34,15 @@ autoreconf -vis
 make && sudo make install
 ```
 
+MacOS:
+Ensure you have libnfc, automake installed (both are available through Homebrew)
+
+```
+autoreconf -vis
+./configure
+make && sudo make install
+```
+
 # Usage #
 Needs libusb0.dll and nfc.dll in the path, better on the same directory.
 Needs to install libusbK v3.0.7.0, using Zadig https://zadig.akeo.ie/, go to Option, List All Devices, select your reader, select libusbK(v3.0.7.0) and click on replace driver.
