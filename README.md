@@ -35,13 +35,8 @@ make && sudo make install
 ```
 
 MacOS:
-Ensure you have libnfc, automake installed (both are available through Homebrew)
+Same as Linux. Ensure you have libnfc, automake installed (both are available through Homebrew)
 
-```
-autoreconf -vis
-./configure
-make && sudo make install
-```
 
 # Usage #
 Needs libusb0.dll and nfc.dll in the path, better on the same directory.
