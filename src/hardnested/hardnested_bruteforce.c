@@ -152,11 +152,11 @@ crack_states_thread(void* x) {
                 char progress_text[80];
                 sprintf(progress_text, "Brute force phase completed. Key found: %012" PRIx64, key);
                 if (thread_arg->trgKey == MC_AUTH_A){
-                    t.sectors[thread_arg->trgBlock / 4].foundKeyA = true;
-                    num_to_bytes(key, 6, t.sectors[thread_arg->trgBlock / 4].KeyA);
+                    t.sectors[block_to_sector(thread_arg->trgBlock)].foundKeyA = true;
+                    num_to_bytes(key, 6, t.sectors[block_to_sector(thread_arg->trgBlock)].KeyA);
                 } else {
-                    t.sectors[thread_arg->trgBlock / 4].foundKeyB = true;
-                    num_to_bytes(key, 6, t.sectors[thread_arg->trgBlock / 4].KeyB);
+                    t.sectors[block_to_sector(thread_arg->trgBlock)].foundKeyB = true;
+                    num_to_bytes(key, 6, t.sectors[block_to_sector(thread_arg->trgBlock)].KeyB);
                 }
                 hardnested_print_progress(thread_arg->num_acquired_nonces, progress_text, 0.0, 0, thread_arg->trgBlock, thread_arg->trgKey, true);
                 break;
