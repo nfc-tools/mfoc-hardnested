@@ -56,6 +56,7 @@ THE SOFTWARE.
 #include "../util.h"
 #include "../util_posix.h"
 #include "../crapto1.h"
+#include "../cmdhfmfhard.h"
 #include "../parity.h"
 #include "../mifare.h"
 #include "../bf_bench_data.h"
