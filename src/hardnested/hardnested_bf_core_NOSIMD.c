@@ -49,7 +49,9 @@ THE SOFTWARE.
 
 #include "hardnested_bruteforce.h"
 #include <stdlib.h>
+#if !defined _MSC_VER && !defined __APPLE__
 #include <malloc.h>
+#endif
 #include "../crapto1.h"
 #include "../parity.h"
 
@@ -81,8 +83,25 @@ typedef union {
 
 // endianness conversion
 #define rev32(word) ((((word) & 0xff) << 24) | ((((word) >> 8) & 0xff) << 16) | ((((word) >> 16) & 0xff) << 8) | ((((word) >> 24) & 0xff)))
+
+#if defined (_WIN32)
+#define malloc_bitslice(x) __builtin_assume_aligned(_aligned_malloc((x), MAX_BITSLICES/8), MAX_BITSLICES/8)
+#define free_bitslice(x) _aligned_free(x)
+#elif defined (__APPLE__)
+
+static void *malloc_bitslice(size_t x) {
+    char *allocated_memory;
+    if (posix_memalign((void**) &allocated_memory, MAX_BITSLICES / 8, x)) {
+        return NULL;
+    } else {
+        return __builtin_assume_aligned(allocated_memory, MAX_BITSLICES / 8);
+    }
+}
+#define free_bitslice(x) free(x)
+#else
 #define malloc_bitslice(x) memalign(MAX_BITSLICES/8, (x))
 #define free_bitslice(x) free(x)
+#endif
 
 // arrays of bitsliced states with identical values in all slices
 static bitslice_t bitsliced_encrypted_nonces[256][KEYSTREAM_SIZE];
