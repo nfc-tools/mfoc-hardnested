@@ -1267,7 +1267,7 @@ int mf_enhanced_auth(int e_sector, int a_sector, mftag t, mfreader r, denonce *d
   if (mode == 'h') {
     // Again, prepare the Auth command with MC_AUTH_A, recover the block and CRC
     Auth[0] = dumpKeysA ? MC_AUTH_A : MC_AUTH_B;
-    Auth[1] = a_sector * 4; //block
+    Auth[1] = sector_to_block(a_sector); //block
     iso14443a_crc_append(Auth, 2);
 
     // Encryption of the Auth command, sending the Auth command

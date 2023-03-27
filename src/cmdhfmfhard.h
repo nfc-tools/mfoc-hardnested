@@ -55,6 +55,7 @@ typedef struct noncelist {
 
 int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBlockNo, uint8_t trgKeyType, bool hard_low_memory);
 void hardnested_print_progress(uint32_t nonces, char *activity, float brute_force, uint64_t min_diff_print_time, uint8_t trgKeyBlock, uint8_t trgKeyType, bool newline);
+uint8_t block_to_sector(uint8_t block);
 
 #endif
 
