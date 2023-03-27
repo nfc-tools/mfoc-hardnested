@@ -278,11 +278,13 @@ int main(int argc, char *const argv[])
   t.authuid = (uint32_t) bytes_to_num(t.nt.nti.nai.abtUid + t.nt.nti.nai.szUidLen - 4, 4);
 
   // Get Mifare Classic type from SAK
-  // see http://www.nxp.com/documents/application_note/AN10833.pdf Section 3.2
+  // see https://www.nxp.com/docs/en/application-note/AN10833.pdf Section 3.2
+  // and https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/nfc/tech/MifareClassic.java
   switch (t.nt.nti.nai.btSak)
   {
     case 0x01:
     case 0x08:
+    case 0x10:
     case 0x88:
     case 0x28:
       if (get_rats_is_2k(t, r)) {
@@ -300,7 +302,11 @@ int main(int argc, char *const argv[])
       t.num_sectors = NR_TRAILERS_MINI;
       t.num_blocks = NR_BLOCKS_MINI;
       break;
+    case 0x11:
     case 0x18:
+    case 0x38:
+    case 0x98:
+    case 0xB8:
       printf("Found Mifare Classic 4k tag\n");
       t.num_sectors = NR_TRAILERS_4k;
       t.num_blocks = NR_BLOCKS_4k;
