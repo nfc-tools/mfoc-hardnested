@@ -18,10 +18,23 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#if !defined _MSC_VER && !defined __APPLE__
 #include <malloc.h>
+#endif
 
 uint32_t* malloc_bitarray_NOSIMD(uint32_t x) {
+#if defined (_WIN32)
+    return __builtin_assume_aligned(_aligned_malloc((x), __BIGGEST_ALIGNMENT__), __BIGGEST_ALIGNMENT__);
+#elif defined (__APPLE__)
+    uint32_t *allocated_memory;
+    if (posix_memalign((void**) &allocated_memory, __BIGGEST_ALIGNMENT__, x)) {
+        return NULL;
+    } else {
+        return __builtin_assume_aligned(allocated_memory, __BIGGEST_ALIGNMENT__);
+    }
+#else
     return __builtin_assume_aligned(memalign(__BIGGEST_ALIGNMENT__, (x)), __BIGGEST_ALIGNMENT__);
+#endif
 }
 
 void free_bitarray_NOSIMD(uint32_t *x) {

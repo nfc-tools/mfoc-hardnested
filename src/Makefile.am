@@ -1,4 +1,4 @@
-AM_CFLAGS  = @libnfc_CFLAGS@
+AM_CFLAGS  = @libnfc_CFLAGS@ @liblzma_CFLAGS@
 
 bin_PROGRAMS = mfoc-hardnested
 
@@ -19,21 +19,21 @@ if X86_SIMD
   SIMD = hardnested/hardnested_bf_core_SSE2.o hardnested/hardnested_bf_core_AVX.o hardnested/hardnested_bf_core_AVX2.o hardnested/hardnested_bf_core_AVX512.o hardnested/hardnested_bitarray_core_SSE2.o hardnested/hardnested_bitarray_core_AVX.o hardnested/hardnested_bitarray_core_AVX2.o hardnested/hardnested_bitarray_core_AVX512.o
   
   hardnested/%_SSE2.o : hardnested/%_SSE2.c
-	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_SSE2) -c -o $@ $<
+	$(CC) $(DEPFLAGS) $(CFLAGS) $(AM_CFLAGS) $(HARD_SWITCH_SSE2) -c -o $@ $<
 
   hardnested/%_AVX.o : hardnested/%_AVX.c
-	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_AVX) -c -o $@ $<
+	$(CC) $(DEPFLAGS) $(CFLAGS) $(AM_CFLAGS) $(HARD_SWITCH_AVX) -c -o $@ $<
 
   hardnested/%_AVX2.o : hardnested/%_AVX2.c
-	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_AVX2) -c -o $@ $<
+	$(CC) $(DEPFLAGS) $(CFLAGS) $(AM_CFLAGS) $(HARD_SWITCH_AVX2) -c -o $@ $<
 
   hardnested/%_AVX512.o : hardnested/%_AVX512.c
-	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_AVX512) -c -o $@ $<
+	$(CC) $(DEPFLAGS) $(CFLAGS) $(AM_CFLAGS) $(HARD_SWITCH_AVX512) -c -o $@ $<
 
 else
 
   SIMD = hardnested/hardnested_bf_core_NOSIMD.o hardnested/hardnested_bitarray_core_NOSIMD.o
   hardnested/%_NOSIMD.o : hardnested/%_NOSIMD.c
-	$(CC) $(DEPFLAGS) $(CFLAGS) -c -o $@ $<
+	$(CC) $(DEPFLAGS) $(CFLAGS) $(AM_CFLAGS) -c -o $@ $<
 
 endif
