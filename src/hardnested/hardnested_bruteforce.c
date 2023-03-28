@@ -151,7 +151,7 @@ crack_states_thread(void* x) {
             if (key != -1) {
                 __sync_fetch_and_add(&keys_found, 1);
                 char progress_text[80];
-                sprintf(progress_text, "Brute force phase completed. Key found: %012" PRIx64, key);
+                sprintf(progress_text, "brute force phase completed");
                 if (thread_arg->trgKey == MC_AUTH_A){
                     t.sectors[block_to_sector(thread_arg->trgBlock)].foundKeyA = true;
                     num_to_bytes(key, 6, t.sectors[block_to_sector(thread_arg->trgBlock)].KeyA);
@@ -159,16 +159,16 @@ crack_states_thread(void* x) {
                     t.sectors[block_to_sector(thread_arg->trgBlock)].foundKeyB = true;
                     num_to_bytes(key, 6, t.sectors[block_to_sector(thread_arg->trgBlock)].KeyB);
                 }
-                hardnested_print_progress(thread_arg->num_acquired_nonces, progress_text, 0.0, 0, thread_arg->trgBlock, thread_arg->trgKey, true);
+                hardnested_print_progress(progress_text);
                 break;
             } else if (keys_found) {
                 break;
             } else {
                 if (!thread_arg->silent) {
                     char progress_text[80];
-                    sprintf(progress_text, "Brute force phase: %6.02f%%", 100.0 * (float) num_keys_tested / (float) (thread_arg->maximum_states));
+                    sprintf(progress_text, "brute force phase: %6.02f%%", 100.0 * (float) num_keys_tested / (float) (thread_arg->maximum_states));
                     float remaining_bruteforce = thread_arg->nonces[thread_arg->best_first_bytes[0]].expected_num_brute_force - (float) num_keys_tested / 2;
-                    hardnested_print_progress(thread_arg->num_acquired_nonces, progress_text, remaining_bruteforce, 5000, thread_arg->trgBlock, thread_arg->trgKey, true);
+                    hardnested_print_progress(progress_text);
                 }
             }
         }
@@ -348,7 +348,6 @@ float brute_force_benchmark() {
     test_candidates[num_core - 1].next = NULL;
 
     if (!read_bench_data(test_candidates)) {
-        PrintAndLog(true, "Couldn't read benchmark data. Assuming brute force rate of %1.0f states per second", DEFAULT_BRUTE_FORCE_RATE);
         return DEFAULT_BRUTE_FORCE_RATE;
     }
 
