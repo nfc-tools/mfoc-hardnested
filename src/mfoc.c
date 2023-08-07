@@ -162,7 +162,7 @@ int main(int argc, char *const argv[])
   struct slre_cap caps[2];  
 
   // Parse command line arguments
-  while ((ch = getopt(argc, argv, "hCZFP:T:O:k:f:")) != -1) {
+  while ((ch = getopt(argc, argv, "hCZBFP:T:O:k:f:")) != -1) {
     switch (ch) {
       case 'C':
         use_default_key=false;
@@ -241,8 +241,11 @@ int main(int argc, char *const argv[])
         }
         // fprintf(stdout, "Output file: %s\n", optarg);
         break;
+      case 'B':
+        dumpKeysA = false;
+        break;
       case 'h':
-        usage(stdout, 0);
+        usage(stderr, 0);
         break;
       default:
         usage(stderr, 1);
@@ -665,7 +668,7 @@ int main(int argc, char *const argv[])
         }
       }
     }
-    dumpKeysA = false;
+    dumpKeysA = !dumpKeysA;
   }
 
 
@@ -788,6 +791,7 @@ void usage(FILE *stream, uint8_t errnr)
   fprintf(stream, "  P     number of probes per sector, instead of default of 20\n");
   fprintf(stream, "  T     nonce tolerance half-range, instead of default of 20\n        (i.e., 40 for the total range, in both directions)\n");
   fprintf(stream, "  O     file in which the card contents will be written\n");
+  fprintf(stream, "  B     extract B keys first\n");
   fprintf(stream, "\n");
   fprintf(stream, "Example: mfoc-hardnested -O mycard.mfd\n");
   fprintf(stream, "Example: mfoc-hardnested -k ffffeeeedddd -O mycard.mfd\n");
