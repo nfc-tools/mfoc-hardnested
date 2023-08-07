@@ -179,15 +179,15 @@ void hardnested_print_progress(char *activity) {
     // pthread_mutex_unlock(&print_lock);
 }
 
-void format_time(char *out, uint32_t time) {
+void format_time(char *out, size_t n, uint32_t time) {
     if (time < 90) {
-        sprintf(out, "%ds", time);
+        snprintf(out, n, "%ds", time);
     } else if (time < 60 * 90) {
-        sprintf(out, "%2.0fmin", (float)time / 60);
+        snprintf(out, n, "%2.0fmin", (float)time / 60);
     } else if (time < 60 * 60 * 36) {
-        sprintf(out, "%2.0fh", (float)time / (60 * 60));
+        snprintf(out, n, "%2.0fh", (float)time / (60 * 60));
     } else {
-        sprintf(out, "%2.0fd", (float)time / (60 * 60 * 24));
+        snprintf(out, n, "%2.0fd", (float)time / (60 * 60 * 24));
     }
 }
 
@@ -816,46 +816,6 @@ static float sort_best_first_bytes(void) {
     return nonces[best_first_bytes[0]].expected_num_brute_force;
 }
 
-
-static float update_reduction_rate(float last, bool init) {
-    static float queue[QUEUE_LEN];
-
-    for (uint16_t i = 0; i < QUEUE_LEN - 1; i++) {
-        if (init) {
-            queue[i] = (float)(1LL << 48);
-        } else {
-            queue[i] = queue[i + 1];
-        }
-    }
-    if (init) {
-        queue[QUEUE_LEN - 1] = (float)(1LL << 48);
-    } else {
-        queue[QUEUE_LEN - 1] = last;
-    }
-
-    // linear regression
-    float avg_y = 0.0;
-    float avg_x = 0.0;
-    for (uint16_t i = 0; i < QUEUE_LEN; i++) {
-        avg_x += i;
-        avg_y += queue[i];
-    }
-    avg_x /= QUEUE_LEN;
-    avg_y /= QUEUE_LEN;
-
-    float dev_xy = 0.0;
-    float dev_x2 = 0.0;
-    for (uint16_t i = 0; i < QUEUE_LEN; i++) {
-        dev_xy += (i - avg_x) * (queue[i] - avg_y);
-        dev_x2 += (i - avg_x) * (i - avg_x);
-    }
-
-    float reduction_rate = -1.0 * dev_xy / dev_x2;  // the negative slope of the linear regression
-
-    return reduction_rate;
-}
-
-
 static bool shrink_key_space(float *brute_forces) {
     float brute_forces1 = check_smallest_bitflip_bitarrays();
     float brute_forces2 = (float)(1LL << 47);
@@ -863,11 +823,16 @@ static bool shrink_key_space(float *brute_forces) {
         brute_forces2 = sort_best_first_bytes();
     }
     *brute_forces = MIN(brute_forces1, brute_forces2);
-    float reduction_rate = update_reduction_rate(*brute_forces, false);
+    if (brute_forces2 != brute_forces2) { // is nan
+        *brute_forces = brute_forces1; 
+    }
 
-    return ((hardnested_stage & CHECK_2ND_BYTES) &&
-            reduction_rate >= 0.0 &&
-            (reduction_rate < brute_force_per_second * (float)sample_period / 1000.0  || *brute_forces < 0xF00000));
+    // Start brute force when remaining time < acquisition time
+    return (hardnested_stage & CHECK_2ND_BYTES) && (
+        *brute_forces / brute_force_per_second < sample_period * num_acquired_nonces / 1000
+        || *brute_forces < 0xF00000
+        || num_acquired_nonces > 9000
+    );
 }
 
 
@@ -1059,6 +1024,7 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
     bool acquisition_completed = false;
     float brute_force;
     bool reported_suma8 = false;
+    char remaining[10];
 
     num_acquired_nonces = 0;
 
@@ -1067,7 +1033,7 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
     pKeys pk = {NULL, 0};
     bool dumpKeysA = (trgKeyType == MC_AUTH_A ? true : false);
     char progress_string[80];
-    //            
+
     uint32_t enc_bytes = 0;
     uint8_t parbits = 0;
     do {
@@ -1092,14 +1058,15 @@ static int acquire_nonces(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_
             }
             update_nonce_data(true);
             acquisition_completed = shrink_key_space(&brute_force);
-        } else {
-            // update_nonce_data(true);
-            // acquisition_completed = shrink_key_space(&brute_force);
-            // hardnested_print_progress(num_acquired_nonces, "Apply bit flip properties", brute_force, 0, trgBlockNo, trgKeyType, false);
         }
-        // Make progress meter more monotonic
-        float progress = (1 - log2(256 - first_byte_num + 1) / 8) * 100;
-        sprintf(progress_string, "acquiring nonces, %d (%d%%)", num_acquired_nonces, (int)progress);
+        if (hardnested_stage & CHECK_2ND_BYTES) {
+            format_time(remaining, sizeof(remaining), brute_force / brute_force_per_second);
+            snprintf(progress_string, sizeof(progress_string), "acquiring more nonces, %d, remaining bruteforce time %s", num_acquired_nonces, remaining);
+        } else {
+            // Make progress meter more monotonic
+            float progress = (1 - log2(256 - first_byte_num + 1) / 8) * 100;
+            snprintf(progress_string, sizeof(progress_string), "acquiring nonces, %d (%d%%)", num_acquired_nonces, (int)progress);
+        }
         hardnested_print_progress(progress_string);
 
         if (msclock() - last_sample_clock < sample_period) {
@@ -1205,7 +1172,7 @@ static inline bool bitflips_match(uint8_t byte, uint32_t state, odd_even_t odd_e
     if (!possible) {
         if (!quiet && known_target_key != -1 && state == test_state[odd_even]) {
             printf("Initial state lists: %s test state eliminated by bitflip property.\n", odd_even == EVEN_STATE ? "even" : "odd");
-            sprintf(failstr, "Initial %s Byte Bitflip property", odd_even == EVEN_STATE ? "even" : "odd");
+            snprintf(failstr, sizeof(failstr), "Initial %s Byte Bitflip property", odd_even == EVEN_STATE ? "even" : "odd");
         }
         return false;
     }
@@ -1245,7 +1212,7 @@ static bool all_bitflips_match(uint8_t byte, uint32_t state, odd_even_t odd_even
                         test_state[odd_even],
                         byte, byte2, num_common);
                 if (failstr[0] == '\0') {
-                    sprintf(failstr, "Other 1st Byte %s, all_bitflips_match(), no match", odd_even ? "odd" : "even");
+                    snprintf(failstr, sizeof(failstr), "Other 1st Byte %s, all_bitflips_match(), no match", odd_even ? "odd" : "even");
                 }
             }
             return false;
@@ -1712,7 +1679,6 @@ int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBloc
     init_sum_bitarrays();
     init_allbitflips_array();
     init_nonce_memory();
-    update_reduction_rate(0.0, true);
 
     uint16_t is_OK = acquire_nonces(blockNo, keyType, key, trgBlockNo, trgKeyType);
     if (is_OK != 0) {
@@ -1736,7 +1702,9 @@ int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBloc
     uint32_t num_even = nonces[best_first_byte_smallest_bitarray].num_states_bitarray[EVEN_STATE];
     float expected_brute_force1 = (float) num_odd * num_even / 2.0;
     float expected_brute_force2 = nonces[best_first_bytes[0]].expected_num_brute_force;
-    if (expected_brute_force1 < expected_brute_force2) {
+    if (expected_brute_force1 < expected_brute_force2
+        || expected_brute_force2 != expected_brute_force2 // is nan
+    ) {
         set_test_state(best_first_byte_smallest_bitarray);
         add_bitflip_candidates(best_first_byte_smallest_bitarray);
         Tests2();
@@ -1747,8 +1715,8 @@ int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBloc
         best_first_bytes[0] = best_first_byte_smallest_bitarray;
         pre_XOR_nonces();
         prepare_bf_test_nonces(nonces, best_first_bytes[0]);
-        format_time(remaining, expected_brute_force1 / brute_force_per_second);
-        sprintf(progress_text, "starting brute force, remaining %s", remaining);
+        format_time(remaining, sizeof(remaining), expected_brute_force1 / brute_force_per_second);
+        snprintf(progress_text, sizeof(progress_text), "starting brute force, remaining %s", remaining);
         hardnested_print_progress(progress_text);
         brute_force(trgBlockNo, trgKeyType);
         free(candidates->states[ODD_STATE]);
@@ -1760,8 +1728,8 @@ int mfnestedhard(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBloc
         prepare_bf_test_nonces(nonces, best_first_bytes[0]);
         for (uint8_t j = 0; j < NUM_SUMS && !key_found; j++) {
             float expected_brute_force = nonces[best_first_bytes[0]].expected_num_brute_force;
-            format_time(remaining, expected_brute_force / brute_force_per_second);
-            sprintf(progress_text, "starting brute force (%d. guess: Sum(a8) = %d), remaining %s", j + 1, sums[nonces[best_first_bytes[0]].sum_a8_guess[j].sum_a8_idx], remaining);
+            format_time(remaining, sizeof(remaining), expected_brute_force / brute_force_per_second);
+            snprintf(progress_text, sizeof(progress_text), "starting brute force (%d. guess: Sum(a8) = %d), remaining %s", j + 1, sums[nonces[best_first_bytes[0]].sum_a8_guess[j].sum_a8_idx], remaining);
             hardnested_print_progress(progress_text);
             generate_candidates(first_byte_Sum, nonces[best_first_bytes[0]].sum_a8_guess[j].sum_a8_idx);
             key_found = brute_force(trgBlockNo, trgKeyType);
