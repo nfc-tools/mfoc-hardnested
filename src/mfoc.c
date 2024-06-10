@@ -183,7 +183,7 @@ int main(int argc, char *const argv[])
           exit(EXIT_FAILURE);
         }
         d.tolerance = (uint32_t)res;
-        fprintf(stdout, "Tolerance number: %d\n", probes);
+        fprintf(stdout, "Tolerance number: %d\n", d.tolerance);
       }
       break;
     case 'f':
