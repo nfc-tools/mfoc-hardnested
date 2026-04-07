@@ -267,10 +267,10 @@ int main(int argc, char *const argv[])
     }
   }
 
-  // if (!pfDump) {
-  //   ERR("parameter -O is mandatory");
-  //   exit(EXIT_FAILURE);
-  // }
+  if (target_key_type != 0 && target_sector < 0) {
+    ERR("Option -t requires -s (specify a target sector with -s)");
+    exit(EXIT_FAILURE);
+  }
 
   // Initialize reader/tag structures
   mf_init(&r);
