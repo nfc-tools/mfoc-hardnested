@@ -112,6 +112,8 @@ int main(int argc, char *const argv[])
   bool failure = false;
   bool skip = false;
   bool force_hardnested = false;
+  int target_sector = -1;    // -1 = all sectors (default behavior)
+  int target_key_type = 0;   // 0 = both keys, 'A' = Key A only, 'B' = Key B only
   // Next default key specified as option (-k)
   uint8_t *defKeys = NULL, *p;
   size_t defKeys_len = 0;
@@ -162,7 +164,7 @@ int main(int argc, char *const argv[])
   struct slre_cap caps[2];  
 
   // Parse command line arguments
-  while ((ch = getopt(argc, argv, "hCZFP:T:O:k:f:")) != -1) {
+  while ((ch = getopt(argc, argv, "hCZFP:T:O:k:f:s:t:")) != -1) {
     switch (ch) {
       case 'C':
         use_default_key=false;
@@ -225,6 +227,21 @@ int main(int argc, char *const argv[])
         defKeys_len = defKeys_len + 6;
 
         break;
+      case 's':
+        target_sector = atoi(optarg);
+        if (target_sector < 0) {
+          ERR("Target sector must be a non-negative number");
+          exit(EXIT_FAILURE);
+        }
+        break;
+      case 't':
+        if (optarg[0] == 'A' || optarg[0] == 'a') target_key_type = 'A';
+        else if (optarg[0] == 'B' || optarg[0] == 'b') target_key_type = 'B';
+        else {
+          ERR("Key type must be A or B");
+          exit(EXIT_FAILURE);
+        }
+        break;
       case 'F':
         //force hardnested
         force_hardnested = true;
@@ -250,10 +267,10 @@ int main(int argc, char *const argv[])
     }
   }
 
-  // if (!pfDump) {
-  //   ERR("parameter -O is mandatory");
-  //   exit(EXIT_FAILURE);
-  // }
+  if (target_key_type != 0 && target_sector < 0) {
+    ERR("Option -t requires -s (specify a target sector with -s)");
+    exit(EXIT_FAILURE);
+  }
 
   // Initialize reader/tag structures
   mf_init(&r);
@@ -308,6 +325,11 @@ int main(int argc, char *const argv[])
     default:
       ERR("Cannot determine card type from SAK");
       goto error;
+  }
+
+  if (target_sector >= 0 && target_sector >= (int)t.num_sectors) {
+    ERR("Target sector %d out of range (card has sectors 0-%d)", target_sector, t.num_sectors - 1);
+    goto error;
   }
 
   t.sectors = (void *) calloc(t.num_sectors, sizeof(sector));
@@ -517,7 +539,12 @@ int main(int argc, char *const argv[])
   // Recover key from encrypted sectors, j is a sector counter
   for (m = 0; m < 2; ++m) {
     if (e_sector == -1) break; // All keys are default, I am skipping recovery mode
-    for (j = 0; j < (t.num_sectors); ++j) {
+    // Skip key type pass if user specified -t
+    if (target_key_type == 'B' && dumpKeysA) { dumpKeysA = false; continue; }
+    if (target_key_type == 'A' && !dumpKeysA) break;
+    int j_start = (target_sector >= 0) ? target_sector : 0;
+    int j_end   = (target_sector >= 0) ? target_sector + 1 : (int)t.num_sectors;
+    for (j = j_start; j < j_end; ++j) {
       memcpy(mp.mpa.abtAuthUid, t.nt.nti.nai.abtUid + t.nt.nti.nai.szUidLen - 4, sizeof(mp.mpa.abtAuthUid));
       if ((dumpKeysA && !t.sectors[j].foundKeyA) || (!dumpKeysA && !t.sectors[j].foundKeyB)) {
 
@@ -701,6 +728,26 @@ int main(int argc, char *const argv[])
   }
 
 
+  if (target_sector >= 0) {
+    // Targeted sector mode: just print the recovered keys for that sector
+    fprintf(stdout, "\nResults for sector %d:\n", target_sector);
+    if (target_key_type != 'B') {
+      if (t.sectors[target_sector].foundKeyA) {
+        fprintf(stdout, "  Key A: %012llx\n", bytes_to_num(t.sectors[target_sector].KeyA, 6));
+      } else {
+        fprintf(stdout, "  Key A: not found\n");
+      }
+    }
+    if (target_key_type != 'A') {
+      if (t.sectors[target_sector].foundKeyB) {
+        fprintf(stdout, "  Key B: %012llx\n", bytes_to_num(t.sectors[target_sector].KeyB, 6));
+      } else {
+        fprintf(stdout, "  Key B: not found\n");
+      }
+    }
+    goto cleanup;
+  }
+
   for (i = 0; i < (t.num_sectors); ++i) {
     if ((dumpKeysA && !t.sectors[i].foundKeyA) || (!dumpKeysA && !t.sectors[i].foundKeyB)) {
       fprintf(stdout, "\nTry again, there are still some encrypted blocks\n");
@@ -790,6 +837,7 @@ int main(int argc, char *const argv[])
     }
   }
 
+cleanup:
   free(t.sectors);
   free(d.distances);
 
@@ -809,22 +857,26 @@ error:
 
 void usage(FILE *stream, uint8_t errnr)
 {
-  fprintf(stream, "Usage: mfoc-hardnested [-h] [-C] [-F] [-k key] [-f file] ... [-P probnum] [-T tolerance] [-O output]\n");
+  fprintf(stream, "Usage: mfoc-hardnested [-h] [-C] [-F] [-k key] [-f file] ... [-P probnum] [-T tolerance] [-O output] [-s sector] [-t A|B]\n");
   fprintf(stream, "\n");
   fprintf(stream, "  h     print this help and exit\n");
   fprintf(stream, "  C     skip testing default keys\n");
   fprintf(stream, "  F     force the hardnested keys extraction\n");
   fprintf(stream, "  Z     reduce memory usage\n");
   fprintf(stream, "  k     try the specified key in addition to the default keys\n");
-  fprintf(stream, "  f     parses a file of keys to add in addition to the default keys \n");    
+  fprintf(stream, "  f     parses a file of keys to add in addition to the default keys \n");
   fprintf(stream, "  P     number of probes per sector, instead of default of 20\n");
   fprintf(stream, "  T     nonce tolerance half-range, instead of default of 20\n        (i.e., 40 for the total range, in both directions)\n");
   fprintf(stream, "  O     file in which the card contents will be written\n");
+  fprintf(stream, "  s     attack only the specified sector number (default: all unknown sectors)\n");
+  fprintf(stream, "  t     key type to recover: A or B (default: both). Requires -s\n");
   fprintf(stream, "\n");
   fprintf(stream, "Example: mfoc-hardnested -O mycard.mfd\n");
   fprintf(stream, "Example: mfoc-hardnested -k ffffeeeedddd -O mycard.mfd\n");
   fprintf(stream, "Example: mfoc-hardnested -f keys.txt -O mycard.mfd\n");
   fprintf(stream, "Example: mfoc-hardnested -P 50 -T 30 -O mycard.mfd\n");
+  fprintf(stream, "Example: mfoc-hardnested -k ffffeeeedddd -s 3\n");
+  fprintf(stream, "Example: mfoc-hardnested -k ffffeeeedddd -s 3 -t A\n");
   fprintf(stream, "\n");
   fprintf(stream, "This is mfoc-hardnested version %s.\n", PACKAGE_VERSION);
   exit(errnr);
