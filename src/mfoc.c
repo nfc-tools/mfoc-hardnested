@@ -731,15 +731,19 @@ int main(int argc, char *const argv[])
   if (target_sector >= 0) {
     // Targeted sector mode: just print the recovered keys for that sector
     fprintf(stdout, "\nResults for sector %d:\n", target_sector);
-    if (t.sectors[target_sector].foundKeyA) {
-      fprintf(stdout, "  Key A: %012llx\n", bytes_to_num(t.sectors[target_sector].KeyA, 6));
-    } else {
-      fprintf(stdout, "  Key A: not found\n");
+    if (target_key_type != 'B') {
+      if (t.sectors[target_sector].foundKeyA) {
+        fprintf(stdout, "  Key A: %012llx\n", bytes_to_num(t.sectors[target_sector].KeyA, 6));
+      } else {
+        fprintf(stdout, "  Key A: not found\n");
+      }
     }
-    if (t.sectors[target_sector].foundKeyB) {
-      fprintf(stdout, "  Key B: %012llx\n", bytes_to_num(t.sectors[target_sector].KeyB, 6));
-    } else {
-      fprintf(stdout, "  Key B: not found\n");
+    if (target_key_type != 'A') {
+      if (t.sectors[target_sector].foundKeyB) {
+        fprintf(stdout, "  Key B: %012llx\n", bytes_to_num(t.sectors[target_sector].KeyB, 6));
+      } else {
+        fprintf(stdout, "  Key B: not found\n");
+      }
     }
     goto cleanup;
   }
