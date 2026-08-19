@@ -108,14 +108,28 @@ static uint8_t targetKEY;
 static bool hard_LOW_MEM;
 static bool bitflips_available[2][0x400];
 static bool bitflips_allocated[2][0x400];
+// -Z mode's worker threads all walk the same bitflip index sequence over
+// disjoint nonce ranges, so several threads can hold a table returned by
+// get_bitflip_data() for the same (odd_even, bitflip) at once. Refcounting
+// (instead of freeing unconditionally on every remove_bitflip_data() call)
+// keeps a thread that's still reading the table from losing it to another
+// thread's free - a use-after-free that otherwise segfaults inside the
+// bitsliced AND cores.
+static uint16_t bitflip_refcount[2][0x400];
 static pthread_mutex_t bitflip_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 void remove_bitflip_data(odd_even_t odd_even, uint16_t bitflip){
     pthread_mutex_lock(&bitflip_mutex);
     if (hard_LOW_MEM && bitflips_allocated[odd_even][bitflip]) {
-        free_bitarray(bitflip_bitarrays[odd_even][bitflip]);
-        bitflips_allocated[odd_even][bitflip] = false;
+        if (bitflip_refcount[odd_even][bitflip] > 0) {
+            bitflip_refcount[odd_even][bitflip]--;
+        }
+        if (bitflip_refcount[odd_even][bitflip] == 0) {
+            free_bitarray(bitflip_bitarrays[odd_even][bitflip]);
+            bitflip_bitarrays[odd_even][bitflip] = NULL;
+            bitflips_allocated[odd_even][bitflip] = false;
+        }
     }
     pthread_mutex_unlock(&bitflip_mutex);
 }
@@ -150,11 +164,13 @@ uint32_t* get_bitflip_data(odd_even_t odd_even, uint16_t bitflip) {
         }
         lzma_end(&strm);
     }
+    uint32_t *result = bitflip_bitarrays[odd_even][bitflip];
+    if (hard_LOW_MEM && result != NULL) {
+        bitflip_refcount[odd_even][bitflip]++;
+    }
     pthread_mutex_unlock(&bitflip_mutex);
-    
-    return bitflip_bitarrays[odd_even][bitflip];
 
-
+    return result;
 }
 
 
@@ -993,14 +1009,15 @@ __attribute__((force_align_arg_pointer))
                             || (parity1 != parity2 && (bitflip & 0x100))) {     // not bitflip
                         nonces[i].BitFlips[bitflip] = 1;
                         for (odd_even_t odd_even = EVEN_STATE; odd_even <= ODD_STATE; odd_even++) {
-                            if (get_bitflip_data(odd_even, bitflip) != NULL) {
+                            uint32_t *bitflip_data = get_bitflip_data(odd_even, bitflip);
+                            if (bitflip_data != NULL) {
                                 uint32_t old_count = nonces[i].num_states_bitarray[odd_even];
-                                nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], get_bitflip_data(odd_even, bitflip));
+                                nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], bitflip_data);
                                 if (nonces[i].num_states_bitarray[odd_even] != old_count) {
                                     nonces[i].all_bitflips_dirty[odd_even] = true;
                                 }
-                            } 
-                            remove_bitflip_data(odd_even, bitflip);
+                                remove_bitflip_data(odd_even, bitflip);
+                            }
                         }
                     }
                 }
@@ -1029,14 +1046,15 @@ __attribute__((force_align_arg_pointer))
                                     || (parity1 != parity2 && (bitflip & 0x100))) { // not bitflip
                                 nonces[i].BitFlips[bitflip] = 1;
                                 for (odd_even_t odd_even = EVEN_STATE; odd_even <= ODD_STATE; odd_even++) {
-                                    if (get_bitflip_data(odd_even, bitflip) != NULL) {
+                                    uint32_t *bitflip_data = get_bitflip_data(odd_even, bitflip);
+                                    if (bitflip_data != NULL) {
                                         uint32_t old_count = nonces[i].num_states_bitarray[odd_even];
-                                        nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], get_bitflip_data(odd_even, bitflip));
+                                        nonces[i].num_states_bitarray[odd_even] = count_bitarray_AND(nonces[i].states_bitarray[odd_even], bitflip_data);
                                         if (nonces[i].num_states_bitarray[odd_even] != old_count) {
                                             nonces[i].all_bitflips_dirty[odd_even] = true;
                                         }
+                                        remove_bitflip_data(odd_even, bitflip);
                                     }
-                                    remove_bitflip_data(odd_even, bitflip);
                                 }
                                 break;
                             }
