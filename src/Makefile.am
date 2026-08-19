@@ -9,10 +9,14 @@ mfoc_hardnested_LDADD   = @libnfc_LIBS@ $(SIMD)
 
 dist_man_MANS = mfoc-hardnested.1
 
+# -mstackrealign on the AVX/AVX2/AVX512 cores: MinGW-w64 only guarantees a
+# 16-byte aligned stack, but code compiled for these targets can spill 32-byte
+# YMM values to the stack. Without forced realignment that's a segfault,
+# reliably hit inside the pthread worker threads spawned for the brute force.
 HARD_SWITCH_SSE2 = -mmmx -msse2 -mno-avx -mno-avx2 -mno-avx512f
-HARD_SWITCH_AVX = -mmmx -msse2 -mavx -mno-avx2 -mno-avx512f
-HARD_SWITCH_AVX2 = -mmmx -msse2 -mavx -mavx2 -mno-avx512f
-HARD_SWITCH_AVX512 = -mmmx -msse2 -mavx -mavx2 -mavx512f
+HARD_SWITCH_AVX = -mmmx -msse2 -mavx -mno-avx2 -mno-avx512f -mstackrealign
+HARD_SWITCH_AVX2 = -mmmx -msse2 -mavx -mavx2 -mno-avx512f -mstackrealign
+HARD_SWITCH_AVX512 = -mmmx -msse2 -mavx -mavx2 -mavx512f -mstackrealign
 
 if X86_SIMD
 
