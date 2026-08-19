@@ -57,6 +57,7 @@
 #include "mifare.h"
 #include "nfc-utils.h"
 #include "mfoc.h"
+#include "util.h"
 
 //SLRE 
 #include "slre.h"
@@ -151,6 +152,14 @@ int main(int argc, char *const argv[])
   
   // Hardnested low memory
   bool hard_low_memory = false;
+
+  // -e: force which known-key sector is used as the exploit/pivot sector,
+  // instead of find_exploit_sector() auto-picking the highest-numbered one.
+  int forced_e_sector = -1;
+  // -s: restrict the (expensive) recovery loop to only these sectors,
+  // instead of attacking every sector still missing a key.
+  bool use_target_filter = false;
+  bool target_filter[NR_TRAILERS_4k] = {false};
   
   //File pointers for the keyfile 
   FILE * fp;
@@ -162,7 +171,7 @@ int main(int argc, char *const argv[])
   struct slre_cap caps[2];  
 
   // Parse command line arguments
-  while ((ch = getopt(argc, argv, "hCZFP:T:O:k:f:")) != -1) {
+  while ((ch = getopt(argc, argv, "hCZFP:T:O:k:f:e:s:j:")) != -1) {
     switch (ch) {
       case 'C':
         use_default_key=false;
@@ -229,6 +238,37 @@ int main(int argc, char *const argv[])
         //force hardnested
         force_hardnested = true;
         break;
+      case 'j':
+        // Override the worker thread count (default: auto-detected logical CPUs)
+        if (atoi(optarg) < 1) {
+          ERR("The thread count (-j) must be a positive number");
+          exit(EXIT_FAILURE);
+        }
+        set_forced_num_CPUs(atoi(optarg));
+        break;
+      case 'e':
+        // Force which known-key sector is used as the exploit sector
+        if ((forced_e_sector = atoi(optarg)) < 0) {
+          ERR("The exploit sector (-e) must be a non-negative sector number");
+          exit(EXIT_FAILURE);
+        }
+        break;
+      case 's': {
+        // Restrict the recovery loop to a comma-separated list of sectors
+        use_target_filter = true;
+        char *s_copy = strdup(optarg);
+        for (char *tok = strtok(s_copy, ","); tok != NULL; tok = strtok(NULL, ",")) {
+          int sec = atoi(tok);
+          if (sec < 0 || sec >= NR_TRAILERS_4k) {
+            ERR("Invalid sector number passed to -s");
+            free(s_copy);
+            exit(EXIT_FAILURE);
+          }
+          target_filter[sec] = true;
+        }
+        free(s_copy);
+        break;
+      }
       case 'Z':
         //Reduce memory usage
         hard_low_memory = true;
@@ -336,6 +376,19 @@ int main(int argc, char *const argv[])
   // Initialize t.sectors, keys are not known yet
   for (uint8_t s = 0; s < (t.num_sectors); ++s) {
     t.sectors[s].foundKeyA = t.sectors[s].foundKeyB = false;
+  }
+
+  if (forced_e_sector >= t.num_sectors) {
+    ERR("Exploit sector (-e) is out of range for this card");
+    exit(EXIT_FAILURE);
+  }
+  if (use_target_filter) {
+    for (i = t.num_sectors; i < NR_TRAILERS_4k; ++i) {
+      if (target_filter[i]) {
+        ERR("A sector passed to -s is out of range for this card");
+        exit(EXIT_FAILURE);
+      }
+    }
   }
 
   print_nfc_target(&t.nt, true);
@@ -511,7 +564,16 @@ int main(int argc, char *const argv[])
   fflush(stdout);
 
   // Return the first (exploit) sector encrypted with the default key or -1 (we have all keys)
-  e_sector = find_exploit_sector(t);
+  if (forced_e_sector >= 0) {
+    if (!t.sectors[forced_e_sector].foundKeyA && !t.sectors[forced_e_sector].foundKeyB) {
+      ERR("Forced exploit sector (-e) has no known key on this card");
+      exit(EXIT_FAILURE);
+    }
+    fprintf(stdout, "\n\nUsing sector %02d as an exploit sector (forced via -e)\n", forced_e_sector);
+    e_sector = forced_e_sector;
+  } else {
+    e_sector = find_exploit_sector(t);
+  }
   //mf_enhanced_auth(e_sector, 0, t, r, &d, pk, 'd'); // AUTH + Get Distances mode
 
   // Recover key from encrypted sectors, j is a sector counter
@@ -519,7 +581,8 @@ int main(int argc, char *const argv[])
     if (e_sector == -1) break; // All keys are default, I am skipping recovery mode
     for (j = 0; j < (t.num_sectors); ++j) {
       memcpy(mp.mpa.abtAuthUid, t.nt.nti.nai.abtUid + t.nt.nti.nai.szUidLen - 4, sizeof(mp.mpa.abtAuthUid));
-      if ((dumpKeysA && !t.sectors[j].foundKeyA) || (!dumpKeysA && !t.sectors[j].foundKeyB)) {
+      if (((dumpKeysA && !t.sectors[j].foundKeyA) || (!dumpKeysA && !t.sectors[j].foundKeyB))
+              && (!use_target_filter || target_filter[j])) {
 
         // First, try already broken keys
         skip = false;
@@ -809,22 +872,26 @@ error:
 
 void usage(FILE *stream, uint8_t errnr)
 {
-  fprintf(stream, "Usage: mfoc-hardnested [-h] [-C] [-F] [-k key] [-f file] ... [-P probnum] [-T tolerance] [-O output]\n");
+  fprintf(stream, "Usage: mfoc-hardnested [-h] [-C] [-F] [-k key] [-f file] ... [-P probnum] [-T tolerance] [-O output] [-e sector] [-s sector[,sector...]]\n");
   fprintf(stream, "\n");
   fprintf(stream, "  h     print this help and exit\n");
   fprintf(stream, "  C     skip testing default keys\n");
   fprintf(stream, "  F     force the hardnested keys extraction\n");
   fprintf(stream, "  Z     reduce memory usage\n");
   fprintf(stream, "  k     try the specified key in addition to the default keys\n");
-  fprintf(stream, "  f     parses a file of keys to add in addition to the default keys \n");    
+  fprintf(stream, "  f     parses a file of keys to add in addition to the default keys \n");
   fprintf(stream, "  P     number of probes per sector, instead of default of 20\n");
   fprintf(stream, "  T     nonce tolerance half-range, instead of default of 20\n        (i.e., 40 for the total range, in both directions)\n");
   fprintf(stream, "  O     file in which the card contents will be written\n");
+  fprintf(stream, "  e     force this sector (must already have a known key) as the\n        exploit/pivot sector, instead of letting the tool pick one\n");
+  fprintf(stream, "  s     only attack this sector, or comma-separated list of sectors,\n        instead of every sector still missing a key\n");
+  fprintf(stream, "  j     number of worker threads, instead of the auto-detected logical\n        CPU count\n");
   fprintf(stream, "\n");
   fprintf(stream, "Example: mfoc-hardnested -O mycard.mfd\n");
   fprintf(stream, "Example: mfoc-hardnested -k ffffeeeedddd -O mycard.mfd\n");
   fprintf(stream, "Example: mfoc-hardnested -f keys.txt -O mycard.mfd\n");
   fprintf(stream, "Example: mfoc-hardnested -P 50 -T 30 -O mycard.mfd\n");
+  fprintf(stream, "Example: mfoc-hardnested -e 15 -s 1,2,3 -O mycard.mfd\n");
   fprintf(stream, "\n");
   fprintf(stream, "This is mfoc-hardnested version %s.\n", PACKAGE_VERSION);
   exit(errnr);

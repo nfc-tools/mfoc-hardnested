@@ -18,6 +18,7 @@
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
-extern int num_CPUs(void); // number of logical CPUs
+extern int num_CPUs(void); // number of logical CPUs, or the forced override if set
+extern void set_forced_num_CPUs(int n); // override num_CPUs(); pass 0 to go back to auto-detect
 
 #endif // UTIL_H__
