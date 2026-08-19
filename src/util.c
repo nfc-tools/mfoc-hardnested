@@ -24,7 +24,20 @@
 
 // determine number of logical CPU cores (use for multithreaded functions)
 
+// 0 means "not overridden, auto-detect"; every num_CPUs() caller (bit flip
+// property threads, hardnested brute force worker threads, progress
+// messages) goes through this one function, so setting the override here
+// is enough to change the thread count everywhere.
+static int forced_num_CPUs = 0;
+
+extern void set_forced_num_CPUs(int n) {
+    forced_num_CPUs = n;
+}
+
 extern int num_CPUs(void) {
+    if (forced_num_CPUs > 0) {
+        return forced_num_CPUs;
+    }
 #ifdef _WIN32
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
